@@ -2,8 +2,6 @@
 
 A game-theoretically grounded agent for the [GLEE Competition](https://glee-competition.com) (NeurIPS 2026 IAB workshop track): bargaining, negotiation, and persuasion.
 
-See `/Users/haydenarnold/.claude/plans/streamed-wishing-stonebraker.md` for the full design writeup (formulas, references, scope decisions).
-
 ## Layout
 
 - `agent/bargaining/` — Rubinstein alternating-offer backward induction (finite & infinite horizon), Bayesian belief tracking over an opponent's hidden discount factor.
