@@ -1,0 +1,4 @@
+glee-sdk>=0.0.5
+litellm>=1.0
+pytest>=7.0
+matplotlib>=3.8
