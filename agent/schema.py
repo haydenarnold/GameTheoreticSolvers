@@ -1,18 +1,7 @@
-"""Defensive helpers for reading/writing the GLEE wire format.
+"""Player-name and offer-format helpers shared by the bargaining code.
 
-CONFIRMED live (2026-08-22, server error message): a bargaining offer
-action's gain keys are ALWAYS literally `alice_gain`/`bob_gain`, regardless
-of whether `your_player`/`current_player` report `"alice"`/`"bob"` or
-`"player_1"`/`"player_2"` for that same game. The two naming conventions
-coexist: player-identity fields may use either form, but the offer action's
-keys never do. `read_gain` already tolerated both forms when reading an
-incoming offer, which is why decisions (accept/reject) never failed; the
-bug was that `build_bargaining_offer` used `me` as given, unranslated, to
-build the OUTGOING offer's keys — sending `player_2_gain` when the server
-required `bob_gain`. That got every bargaining game where `your_player` was
-reported in `player_1`/`player_2` form rejected 5 times running and
-force-closed at the 5th percentile. `_canonical` below is the fix: always
-normalize to alice/bob before building an offer.
+Games name the two players either alice/bob or player_1/player_2; these
+helpers normalize between the two so solvers can ignore the difference.
 """
 
 from __future__ import annotations
@@ -71,9 +60,6 @@ def build_bargaining_offer(me: str, my_gain: float, money: float, message: str |
 
 
 def check_fields(valid_actions: dict, action: dict) -> None:
-    """Best-effort sanity check against the server's self-documented field
-    list; logs rather than raises so a docs/format drift doesn't crash the
-    agent mid-game."""
     fields = valid_actions.get("fields")
     if not isinstance(fields, dict):
         return

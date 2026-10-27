@@ -1,3 +1,9 @@
+"""Routes each game to its family's strategy under a hard per-turn deadline.
+
+If a strategy overruns, a safe fallback move is submitted so the game is never
+forfeited on a timeout.
+"""
+
 from __future__ import annotations
 
 import concurrent.futures
@@ -16,40 +22,14 @@ STRATEGIES = {
     "persuasion": persuasion_strategy,
 }
 
-# CONFIRMED (2026-08-25), from the competition's own docs: "120 seconds per
-# turn; miss it and the game ends as no-deal" -- and separately, "Abandoning a
-# game (turn timeout or five invalid moves) scores it at the 5th percentile --
-# the bottom of the scale." A missed turn isn't scored like an ordinary bad
-# outcome; it's scored at the floor. Three consecutive own-turn timeouts also
-# trigger a 30-minute matchmaking cooldown ("agent_cooldown"), compounding the
-# rating loss with a throughput loss at a moment throughput is scarce.
-#
-# Every real strategy call finishes in low single digits of seconds except the
-# LLM-backed message-composition/signal-classification path, which is already
-# bounded by its own per-call `timeout=` passed to litellm (15s in
-# agent/persuasion/signal.py, 20s in agent/rhetoric/compose.py). But a
-# per-call timeout only protects against the provider responding slowly --
-# not against a DNS stall, a hung connection before litellm's own timeout
-# logic engages, or contention on the SDK's shared thread pool. This is a
-# second, independent backstop, at the one seam that wraps every family: if
-# the real strategy call hasn't returned within TURN_DEADLINE_SECONDS, submit
-# a safe, always-schema-valid fallback move instead of risking the full 120s
-# forfeit. 45s is comfortably clear of the ~20s worst-case real latency (wide
-# margin for load/queueing) and far short of 120s, leaving room for the
-# fallback's own negligible cost plus the SDK's move-submission round trip.
 TURN_DEADLINE_SECONDS = 45.0
 
 _EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=32, thread_name_prefix="strategy-deadline")
 
 
+# Fallbacks favor a legal, low-risk move: an even split, a mild markup, and
+# accepting when responding.
 def _fallback_action(game: dict) -> dict:
-    """A safe, always-legal move for when the real strategy didn't return in
-    time. Deliberately unambitious -- it exists only to avoid the forfeit
-    floor (5th percentile, per the docs), not to play well. Accepting
-    whatever's on the table (or, on an opening move, proposing a plain even
-    split / role-scaled anchor) reliably lands as an ordinary scored outcome
-    instead of an abandonment, which is the entire point: almost any real
-    outcome beats the forfeit floor by a wide margin."""
     valid_actions = game.get("valid_actions") or {}
     action_type = valid_actions.get("type")
     state = game.get("game_state") or {}
@@ -70,12 +50,11 @@ def _fallback_action(game: dict) -> dict:
             return {"product_price": price}
         return {"decision": "AcceptOffer"}
 
-    # persuasion
     if action_type == "seller_message":
         return {"message": "This product is worth it."}
     if action_type == "seller_recommendation":
         return {"decision": "yes"}
-    return {"decision": "no"}  # buyer_decision fallback: decline rather than risk an unknown-EV blind buy
+    return {"decision": "no"}
 
 
 def strategy(game: dict) -> dict:

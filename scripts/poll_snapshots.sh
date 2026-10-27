@@ -1,8 +1,7 @@
 #!/bin/bash
-# Calls snapshot_stats.py every INTERVAL_SECONDS, forever. Read-only (just
-# stats() calls) -- safe to run alongside any agent.main process, never
-# touches or interrupts a running game.
-#
+# Runs snapshot_stats.py every interval seconds (default 180), forever.
+# This is done because the API does not provide a way to retrieve aggregate results of games for an agent.
+# Read-only, so it is safe to run alongside a live agent.
 # Usage: poll_snapshots.sh [interval_seconds]
 
 set -euo pipefail

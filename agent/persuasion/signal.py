@@ -1,22 +1,7 @@
-"""LLM-based classification of whether a seller's free-text message
-discourages a purchase, for persuasion's text-mode buyer decision.
+"""LLM classifier that reads a seller's message for a "don't buy" signal.
 
-Kept separate from `rhetoric.compose` deliberately: that module's whole
-contract is "numeric decisions never come from this module, it only phrases
-an already-computed stance" -- this function's output DOES feed a numeric
-decision (buy/no-buy), so it doesn't belong there.
-
-The seller's message is untrusted, adversarial input from a competitive
-opponent -- it may contain text attempting to manipulate the classifier
-itself (embedded fake instructions), not just genuine product commentary.
-The system prompt defends against that the same way `compose.py` defends
-its own untrusted "situation" field.
-
-This module only ever returns a verdict-and-confidence pair, or None if no
-usable verdict was obtained -- it does NOT own the fallback decision. The
-caller (`persuasion.strategy._seller_signaled_buy`) is the one that falls
-back to the fixed DISCOURAGE_PHRASES keyword list whenever this returns
-None, or returns confidence below its own threshold.
+Returns (discourages, confidence) or None on failure, so callers can fall back
+to numeric-only decisions.
 """
 
 from __future__ import annotations
@@ -31,14 +16,10 @@ from litellm import completion
 logger = logging.getLogger("agent.persuasion.signal")
 
 MODEL = os.environ.get("LLM_MODEL", "openrouter/google/gemini-3.7-flash")
-# Single attempt, no retry: unlike rhetoric.compose (where the fallback is a
-# generic static string, so retrying for a real LLM answer has clear value),
-# the fallback here is already a reasonably strong heuristic (the phrase
-# list) -- burning extra latency chasing a marginally-better LLM answer,
-# in a thread pool shared with every other in-flight game's calls, isn't
-# worth it. On any failure, just fall back immediately.
 LLM_TIMEOUT_SECONDS = 15
 
+# The prompt treats the seller's text as untrusted and separates a real warning
+# from mere silence, which would otherwise be read as a confident discourage.
 SYSTEM_PROMPT = """\
 You are classifying ONE short message from a seller in a text-based \
 persuasion game, to help a buyer decide whether to purchase this round.
@@ -96,8 +77,6 @@ def _parse_response(raw: str) -> tuple[bool, float] | None:
 
 
 def classify_discourage_signal(message: str) -> tuple[bool, float] | None:
-    """Returns (discourages, confidence), or None if no usable verdict was
-    obtained (call failed, timed out, or returned something unparseable)."""
     if not message or not message.strip():
         return None
     try:

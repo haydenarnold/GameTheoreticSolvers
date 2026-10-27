@@ -1,10 +1,4 @@
-"""LLM-generated message text for offers/decisions/pitches.
-
-Numeric decisions never come from this module — it only phrases the
-already-computed stance. Two-attempt-then-fallback mirrors the SDK's
-llm_agent.py pattern: never let a slow or malformed provider response cost
-a turn.
-"""
+"""Language-model message layer that writes the text accompanying a numeric move."""
 
 from __future__ import annotations
 
@@ -22,24 +16,8 @@ logger = logging.getLogger("agent.rhetoric")
 MODEL = os.environ.get("LLM_MODEL", "openrouter/google/gemini-3.7-flash")
 MAX_MESSAGE_LEN = 2000
 
-# CONFIRMED live (2026-08-22): a bargaining DECISION (accept/reject) never
-# calls the LLM at all, yet timed out — because it shares one thread pool
-# (client.run(concurrency=N)) with every other in-flight game's
-# compose_message() call, and at the old 60s-per-attempt budget a single
-# retrying call could occupy a worker for up to 120s, matching the server's
-# own per-turn clock. That starves a trivially-fast decision in another game
-# out of a free worker until its own turn already expired. 20s keeps the
-# worst case (2 attempts) at 40s, leaving real headroom.
 LLM_TIMEOUT_SECONDS = 20
 
-# DERIVED (2026-08-23): measured across 131 real messages from games played
-# this session, length averaged 501 chars (median 423), and several ran to
-# 1500+ -- largely from restating the same point (e.g. "look at my
-# unbroken N-round record") in slightly different phrasing each round
-# rather than from any real increase in substance. 300 is roughly a 35% cut
-# from the measured mean, targeting that redundancy specifically -- see
-# SYSTEM_PROMPT's brevity paragraph below, which asks for fewer, non-
-# repeated points rather than less content.
 TARGET_MESSAGE_CHARS = 300
 
 SYSTEM_PROMPT = f"""\
@@ -86,11 +64,6 @@ def _fallback_message(stance: dict) -> str:
 
 
 def _find_message_field(obj) -> str | None:
-    """Depth-first search for a "message"/"text" string anywhere in a parsed
-    JSON action. Observed leaks nest arbitrarily deep (flat
-    `{"decision":..., "message":...}` as well as schema-shaped
-    `{"type":..., "fields": {"message": ...}}`), so a top-level-only lookup
-    misses real, recoverable text."""
     if isinstance(obj, dict):
         for key in ("message", "text"):
             value = obj.get(key)
@@ -109,10 +82,6 @@ def _find_message_field(obj) -> str | None:
 
 
 def _extract_message_text(raw: str) -> str | None:
-    """Recover clean prose from a reply that ignored the "no JSON" instruction
-    and wrapped the message in an action-shaped object (observed live: models
-    echo the server's own action-format instructions from `situation` back at
-    us). Returns None when nothing usable can be recovered."""
     text = raw.strip()
     if not text:
         return None
@@ -121,8 +90,8 @@ def _extract_message_text(raw: str) -> str | None:
         try:
             parsed = json.loads(text)
         except json.JSONDecodeError:
-            return text  # not actually valid JSON, treat as literal prose
-        return _find_message_field(parsed)  # None if no usable field anywhere
+            return text
+        return _find_message_field(parsed)
     return text
 
 
@@ -150,6 +119,7 @@ def compose_message(
         {"role": "user", "content": user_prompt},
     ]
 
+    # Retry once with a stricter reminder, then fall back to a static message.
     for attempt in range(2):
         try:
             response = completion(model=MODEL, messages=messages, timeout=LLM_TIMEOUT_SECONDS)

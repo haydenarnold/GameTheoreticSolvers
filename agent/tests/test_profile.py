@@ -1,12 +1,14 @@
+"""Tests for the rhetorical profile: whole-word matching, negation handling, and
+foundation detection.
+"""
+
 from agent.rhetoric.profile import classify
 
 
 def test_substring_false_positives_are_not_counted():
-    # "scared" contains "care" as a substring; "satisfaction" contains "fact".
-    # Neither should register on the care/evidence lexicons.
     profile = classify(["I'm scared this deal falls through, it would be a real satisfaction to close."])
     assert profile["foundation_scores"]["care"] == 0
-    assert profile["evidence_leaning"] <= 0  # "fact" substring must not count as evidence
+    assert profile["evidence_leaning"] <= 0
 
 
 def test_whole_word_matches_still_count():
@@ -24,8 +26,6 @@ def test_no_messages_gives_neutral_profile():
 
 
 def test_negated_mention_does_not_count_as_affirming():
-    # "not a fair deal" should not register fairness the same way an
-    # unqualified "a fair deal" does.
     negated = classify(["This is not a fair deal for either of us."])
     affirmed = classify(["This is a genuinely fair deal for both of us."])
     assert negated["foundation_scores"]["fairness"] == 0
@@ -38,11 +38,9 @@ def test_negation_applies_to_evidence_leaning_too():
 
 
 def test_dominant_foundation_requires_minimum_evidence():
-    # A single incidental keyword hit shouldn't be enough to confidently
-    # name a dominant foundation.
     profile = classify(["I care about closing this."])
     assert profile["foundation_scores"]["care"] == 1
-    assert profile["dominant_foundation"] is None  # below MIN_FOUNDATION_EVIDENCE
+    assert profile["dominant_foundation"] is None
 
 
 def test_dominant_foundation_fires_once_minimum_evidence_is_met():

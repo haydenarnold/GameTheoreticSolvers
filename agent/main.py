@@ -1,12 +1,6 @@
-"""Entrypoint for the GLEE Competition agent.
+"""Entry point: connects to the GLEE server and plays games with the dispatcher.
 
-Usage:
-    pip install -r requirements.txt
-    export GLEE_API_KEY=glee_...            # from your dashboard at glee-competition.com
-    export LLM_MODEL=gemini/gemini-2.5-flash  # or gpt-5-mini, claude-sonnet-5, ... (any litellm model string)
-    export GEMINI_API_KEY=...               # whichever provider key LLM_MODEL needs
-
-    python -m agent.main
+Requires GLEE_API_KEY; GLEE_API_URL optionally overrides the server.
 """
 
 from __future__ import annotations

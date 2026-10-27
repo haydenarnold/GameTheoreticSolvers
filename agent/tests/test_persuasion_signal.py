@@ -1,3 +1,7 @@
+"""Tests for parsing and classifying the seller's "discourage" signal, including
+failure and low-confidence paths.
+"""
+
 from agent.persuasion.signal import _parse_response, classify_discourage_signal
 
 
@@ -29,7 +33,7 @@ def test_parse_response_returns_none_when_discourages_field_missing_or_wrong_typ
 def test_parse_response_returns_none_when_confidence_field_missing_or_wrong_type():
     assert _parse_response('{"discourages": true}') is None
     assert _parse_response('{"discourages": true, "confidence": "high"}') is None
-    assert _parse_response('{"discourages": true, "confidence": true}') is None  # bool is not a real confidence
+    assert _parse_response('{"discourages": true, "confidence": true}') is None
 
 
 def test_parse_response_returns_none_for_non_dict_json():
@@ -64,17 +68,6 @@ def test_classify_discourage_signal_returns_none_when_the_call_raises(monkeypatc
 
 
 def test_classify_discourage_signal_prompt_distinguishes_generic_filler_from_a_real_hedge():
-    # Regression: a real live game had the seller send the IDENTICAL
-    # generic "No strong recommendation this round." on all 20 rounds
-    # (content-free filler, never varying with true quality). The original
-    # prompt's "or through hedging" clause was broad enough that the model
-    # confidently (>=0.7) classified this as discourages=true every round,
-    # which blanket-declines regardless of the exploration/EV logic --
-    # zero purchases across 20 rounds against a hugely favorable prior
-    # (EV=$24,000 vs $10,000 price). This is a content check (not a live
-    # call) locking in that the corrected guidance and examples are present
-    # in the prompt -- see this module's manual verification against the
-    # real model for confirmation the actual output changed.
     from agent.persuasion.signal import SYSTEM_PROMPT
 
     assert "no strong recommendation" in SYSTEM_PROMPT.lower()

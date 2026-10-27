@@ -1,11 +1,7 @@
-"""Rubinstein alternating-offer bargaining, with per-player discount factors.
+"""Rubinstein alternating-offers solutions for the bargaining game.
 
-`delta_x` is a per-round *discount multiplier* (0.9 = 10% inflation/round),
-so a payoff realized one round later is worth `delta` times as much to that
-player. Both the finite-horizon (backward induction) and infinite/unknown-
-horizon (closed form) subgame-perfect equilibria are standard textbook
-results (Rubinstein 1982, Osborne & Rubinstein 1990 ch. 3); this module is a
-direct transcription of those formulas, generalized to asymmetric deltas.
+Provides the infinite-horizon share, the backward-induction take for a known
+deadline, and a damped blend of the two (Section 3.1 and Appendix A).
 """
 
 from __future__ import annotations
@@ -14,10 +10,9 @@ from agent.schema import opponent_name
 
 
 def infinite_horizon_share(money: float, delta_me: float, delta_opp: float) -> float:
-    """My equilibrium take as proposer, stationary SPE, no deadline."""
     denom = 1 - delta_me * delta_opp
     if denom <= 0:
-        return money  # degenerate (delta product >= 1); take everything
+        return money
     return money * (1 - delta_opp) / denom
 
 
@@ -27,13 +22,6 @@ def finite_horizon_take(
     delta_of,
     rounds_remaining: int,
 ) -> float:
-    """The current round's proposer's equilibrium take, via backward
-    induction from the deadline.
-
-    `rounds_remaining` counts additional rounds possible after the current
-    one (0 means the current round IS the deadline: reject -> no-deal -> 0
-    for both, so the proposer takes the whole pie).
-    """
     if rounds_remaining < 0:
         raise ValueError("rounds_remaining must be >= 0")
 
@@ -57,26 +45,11 @@ def damped_finite_horizon_take(
     delta_of,
     rounds_remaining: int,
 ) -> float:
-    """`finite_horizon_take`, damped toward the converged infinite-horizon
-    value.
-
-    CONFIRMED (2026-08-22): the pure finite backward induction oscillates
-    wildly by round PARITY even with real discounting, because it assumes
-    the deadline proposer takes literally everything (a knife-edge that
-    flips who's favored every single round). At 11 rounds remaining with
-    symmetric delta=0.9, the proposer gets only 37.8% -- when the true
-    converged (infinite-horizon) value is 52.6% -- purely because 11 is odd,
-    not because of anything strategically meaningful. This blends the two:
-    weight on the exact finite value decays geometrically as
-    `(delta_me*delta_opp)^rounds_remaining`, so it dominates only near a
-    real deadline (where "who proposes last" is actually informative) and
-    fades out for anything more than a handful of rounds away, where hanging
-    the entire offer on that knife-edge is not a realistic assumption about
-    how the game will actually be played.
-    """
     other = opponent_name(current_proposer)
     finite = finite_horizon_take(money, current_proposer, delta_of, rounds_remaining)
     infinite = infinite_horizon_share(money, delta_of(current_proposer), delta_of(other))
+    # Raw backward induction flips with round parity when deltas are near 1, so
+    # the exact result only dominates close to the deadline.
     alpha = (delta_of(current_proposer) * delta_of(other)) ** rounds_remaining
     return alpha * finite + (1 - alpha) * infinite
 
@@ -87,11 +60,7 @@ def reject_continuation_value(
     delta_of,
     rounds_remaining: int,
 ) -> float:
-    """My payoff if I reject the current offer: I become proposer next
-    round, discounted once by my own delta. `rounds_remaining` is the
-    remaining-rounds count for the CURRENT (offer) round, i.e. the same
-    value passed to `finite_horizon_take` for this decision."""
     if rounds_remaining <= 0:
-        return 0.0  # this decision is at (or past) the deadline
+        return 0.0
     my_take_next_round = finite_horizon_take(money, me, delta_of, rounds_remaining - 1)
     return delta_of(me) * my_take_next_round

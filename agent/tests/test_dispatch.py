@@ -1,3 +1,7 @@
+"""Tests for the dispatcher: routing by game family and the deadline fallback
+moves.
+"""
+
 import time
 
 import pytest
@@ -61,7 +65,7 @@ def test_strategy_falls_back_when_handler_exceeds_deadline(monkeypatch):
 
     monkeypatch.setattr(dispatch_mod, "STRATEGIES", {"bargaining": slow_handler})
     action = strategy(_bargaining_decision_game())
-    assert action == {"decision": "accept"}  # the fallback, not the slow handler's real return
+    assert action == {"decision": "accept"}
 
 
 def test_unknown_family_still_raises():
@@ -105,7 +109,4 @@ def test_fallback_persuasion_seller_recommendation_recommends():
 
 
 def test_fallback_persuasion_buyer_decision_declines_conservatively():
-    # Declining (not buying) is the conservative default: a passed round is
-    # always $0 for both sides, never a large realized loss, unlike a blind
-    # "yes" on an unknown-quality round.
     assert _fallback_action(_persuasion_game("buyer_decision")) == {"decision": "no"}

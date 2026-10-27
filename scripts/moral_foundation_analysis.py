@@ -1,25 +1,10 @@
-"""Per-family breakdown of message success rate by dominant moral-foundation
-framing (care, fairness, loyalty, authority, purity), classified with the
-same lexicon logic the agent uses live (agent/rhetoric/profile.py).
+"""Tests whether the moral-foundation framing of our messages predicts success.
 
-For each of our own outgoing messages with a classifiable dominant
-foundation (>= MIN_FOUNDATION_EVIDENCE lexicon matches), "success" is:
-  - persuasion: the buyer bought that round (`bought` in the history entry).
-  - negotiation: the opponent accepted our offer outright that round
-    (`decision == "AcceptOffer"`).
-  - bargaining: the opponent accepted our proposal outright that round
-    (`decision == "accept"`).
-These are strict accept/reject outcomes, not a concession-direction metric
-(did the opponent's next counteroffer move toward us) -- if the paper text
-describes the latter, this script does not implement it.
-
-Runs a chi-square test of independence (5 foundations x {success, failure})
-per family, over data/games_index.jsonl (built/extended by
-scripts/build_games_index.py). Coverage varies by family depending on how
-much of that family's game history has been indexed with full game_state.
-
-Usage: .venv/bin/python scripts/moral_foundation_analysis.py
+Each outgoing message is labeled with its dominant foundation using the same
+lexicon the agent uses live, then a chi-square test of independence is run per
+family.
 """
+
 from __future__ import annotations
 
 import json
@@ -35,14 +20,11 @@ INDEX_PATH = ROOT / "data" / "games_index.jsonl"
 
 FOUNDATIONS = ["care", "fairness", "loyalty", "authority", "purity"]
 
-# Final live games_played per family, for reporting index coverage -- update
-# if re-running against a different/later competition snapshot.
+# Final games-played counts per family, used only to report sample coverage.
 FINAL_GAMES_PLAYED = {"bargaining": 4631, "negotiation": 5750, "persuasion": 5325}
 
 
 def dominant_foundation_for_message(text: str | None) -> str | None:
-    """Same rule as agent.rhetoric.profile.classify(), applied to ONE message
-    instead of a joined batch."""
     if not text:
         return None
     lowered = text.lower()
@@ -53,10 +35,6 @@ def dominant_foundation_for_message(text: str | None) -> str | None:
 
 
 def load_latest_games() -> dict:
-    """games_index.jsonl is append-only; a game_id can appear more than once
-    (e.g. once before game_state was added to the record schema). Take the
-    last occurrence per game_id, standard dedupe-by-latest for an
-    append-only log."""
     latest = {}
     with open(INDEX_PATH, encoding="utf-8") as f:
         for line in f:
@@ -73,7 +51,7 @@ def load_latest_games() -> dict:
 
 
 def collect_counts(games: dict, family: str) -> dict[str, list[int]]:
-    counts: dict[str, list[int]] = defaultdict(lambda: [0, 0])  # foundation -> [successes, failures]
+    counts: dict[str, list[int]] = defaultdict(lambda: [0, 0])
 
     for d in games.values():
         if d["family"] != family:
@@ -81,6 +59,8 @@ def collect_counts(games: dict, family: str) -> dict[str, list[int]]:
         state = d["game_state"]
         me = d["your_player"]
 
+        # Success means a different thing per family: the buyer bought
+        # (persuasion) or the opponent accepted our offer (negotiation, bargaining).
         if family == "persuasion":
             if state.get("seller_message_type") != "text":
                 continue

@@ -1,43 +1,10 @@
-"""Classify each real completed live game's opponent against the 11
-deterministic archetype behaviors already implemented in
-montecarlo_opponents.py, using FULL per-round history -- both our own
-actual historical moves and the opponent's actual real responses -- not
-just aggregate outcome.
+"""Labels each indexed live game with its best-fitting synthetic archetype.
 
-This is a best-fit SIMILARITY match, not a ground-truth label. A real
-opponent (almost certainly another LLM-driven agent, not literally one of
-these 11 hand-written rule-sets) is not guaranteed to resemble any of them
-well. For each archetype, we replay our own real historical offers/signals
-through that archetype's exact `propose()`/`decide()`/`signal()` rules
-(imported directly from montecarlo_opponents.py, not reimplemented) and
-score how closely its predictions match what the real opponent actually
-did, round by round. The archetype with the lowest error is the game's
-inferred label; the fit-quality gap between the best and second-best match
-is reported too, since a poor best-fit score means "least-bad guess", not
-a confident label.
-
-Information caveats, stated up front rather than glossed over:
-  - Bargaining: fully specified either way (money/max_rounds are always
-    known to both sides); classification confidence does not depend on
-    complete_information here.
-  - Negotiation: the archetype rules need the opponent's OWN true
-    reservation value. Under complete_information that's known exactly
-    (high confidence). Under incomplete information it is NOT knowable --
-    we substitute a proxy estimate (their most extreme revealed price) and
-    mark these classifications lower-confidence explicitly.
-  - Persuasion: price/p/v/u are always public, so classifying the BUYER
-    (when we're seller) is always fully specified. Classifying the SELLER
-    (when we're buyer) requires the true quality each round, which we only
-    ever learn on rounds where we actually bought -- rounds we passed on
-    contribute no evidence and are skipped, so seller classifications from
-    fewer purchased rounds carry a smaller, explicitly reported sample size.
-
-Requires data/games_index.jsonl entries built with `game_state` present
-(see build_games_index.py's 2026-08-27 update) -- earlier summary-only
-entries are skipped.
-
-Usage: .venv/bin/python scripts/classify_opponents.py [family ...]
+Every archetype from the Monte Carlo suite is replayed against the recorded
+moves, and the one with the lowest prediction error is the game's label.
+Output feeds the per-archetype comparison of our live scores.
 """
+
 from __future__ import annotations
 
 import json
@@ -58,27 +25,13 @@ OUT_PATH = f"{ROOT}/data/opponent_classifications.jsonl"
 
 FAMILIES = sys.argv[1:] or ["bargaining", "negotiation", "persuasion"]
 
-# Games with fewer than this many scoreable (predict-vs-actual) rounds
-# don't carry enough signal to distinguish 11 archetypes meaningfully --
-# e.g. a round-1 instant agreement is one data point. Still classified
-# (lowest error wins), but flagged low-confidence via `n_observations`
-# in the output rather than silently presented as equally solid.
+# Labels backed by fewer observations than this are kept but not reported as confident.
 MIN_CONFIDENT_OBSERVATIONS = 3
 
-# A guessed, fixed stand-in for `BargOpponent`/`NegOpponent`'s own internal
-# `_bayes_delta_me` / patience parameter -- in the original Monte Carlo
-# simulation this is drawn per-trial from a private RNG the archetype uses
-# to model ITS OWN hidden patience, which has no real counterpart to
-# recover from a single real game's revealed behavior. Only affects the
-# bayesian_rational/noisy_rational archetypes' predicted curve; a fixed
-# central estimate is a reasonable simplification for a best-fit match,
-# not a claim about the real opponent's actual patience.
 ASSUMED_OPPONENT_DELTA = 0.85
 
 
 def load_index():
-    """Dedupe by latest occurrence per game_id (see build_games_index.py's
-    load_existing_ids docstring for why a game_id can appear twice)."""
     by_id = {}
     with open(INDEX_PATH, encoding="utf-8") as f:
         for line in f:
@@ -95,10 +48,6 @@ def load_index():
     return list(by_id.values())
 
 
-# ============================================================================
-# BARGAINING
-# ============================================================================
-
 def classify_bargaining(record) -> dict | None:
     state = record["game_state"]
     me = record["your_player"]
@@ -114,9 +63,7 @@ def classify_bargaining(record) -> dict | None:
 
     scores = {}
     for archetype in ARCHETYPES:
-        rng = __import__("random").Random(0)  # deterministic seed; noise archetypes still vary run-to-run in
-        # the original simulation, but a fixed seed here makes the fit score reproducible, which matters more
-        # for a classifier than matching any one specific noisy draw.
+        rng = __import__("random").Random(0)
         opponent = BargOpponent(archetype, money, max_rounds, rng)
         propose_errors = []
         decision_matches = []
@@ -159,20 +106,13 @@ def classify_bargaining(record) -> dict | None:
     }
 
 
-# ============================================================================
-# NEGOTIATION
-# ============================================================================
-
 def _estimate_opponent_value(state, me, opp, opp_role) -> tuple[float | None, bool]:
-    """Returns (estimate, is_exact). Exact under complete_information (the
-    real value is in state); otherwise a proxy from their own most extreme
-    revealed price -- their lowest ask if they're a seller, highest if
-    buyer -- which is the best available lower/upper-bound signal without
-    ever knowing their true reservation value."""
     if state.get("complete_information"):
         val = state.get(f"{opp}_value")
         if val is not None:
             return val, True
+    # Without complete information, the opponent's extreme price so far is only a
+    # bound on their value, so the result is flagged as inexact.
     prices = [h["offer"]["price"] for h in state.get("history", [])
               if h.get("offer", {}).get("from_player") == opp and h["offer"].get("price") is not None]
     if not prices:
@@ -199,7 +139,7 @@ def classify_negotiation(record) -> dict | None:
     for archetype in ARCHETYPES:
         rng = __import__("random").Random(0)
         opponent = NegOpponent(archetype, opp_role, (opp_value, opp_value), rng)
-        opponent.true_value = opp_value  # pin exactly rather than sampling from the (degenerate) range above
+        opponent.true_value = opp_value
         propose_errors = []
         decision_matches = []
         for h in history:
@@ -240,10 +180,6 @@ def classify_negotiation(record) -> dict | None:
     }
 
 
-# ============================================================================
-# PERSUASION
-# ============================================================================
-
 def classify_persuasion(record) -> dict | None:
     state = record["game_state"]
     me = record["your_player"]
@@ -255,8 +191,6 @@ def classify_persuasion(record) -> dict | None:
 
     scores = {}
     if my_role == "seller":
-        # Classify the BUYER's archetype: always fully specified (we know
-        # true quality every round when we're the seller).
         for archetype in ARCHETYPES:
             rng = __import__("random").Random(0)
             opp = PersOpponentBuyer(archetype, rng)
@@ -271,10 +205,6 @@ def classify_persuasion(record) -> dict | None:
             if matches:
                 scores[archetype] = (1 - sum(matches) / len(matches), len(matches))
     else:
-        # Classify the SELLER's archetype: only usable on rounds where we
-        # (the buyer) actually learn true quality -- i.e. rounds we bought.
-        # Rounds we passed on reveal nothing about the seller's honesty
-        # that round and are skipped -- see module docstring.
         known_quality_rounds = [h for h in history if "quality" in h]
         if not known_quality_rounds:
             return None
@@ -312,8 +242,6 @@ CLASSIFIERS = {
 
 
 def our_normalized_score(record) -> float | None:
-    """Same convention as the recurring check's rank_losses.py badness
-    functions, sign-flipped so higher = better here."""
     state = record["game_state"]
     me = record["your_player"]
     family = record["family"]

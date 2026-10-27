@@ -1,21 +1,10 @@
-"""Build/extend a persistent, deduped index of every completed LIVE
-competition game we've played, for easy reference (not simulation --
-see scripts/montecarlo_opponents.py for that).
+"""Builds the persistent index of completed games used by the rhetoric analysis.
 
-Nothing durable tracked this before: data/stats_history.csv only has
-periodic aggregate (rating, games_played) snapshots, not individual games.
-This scans every known run-log location for game IDs (same discovery
-approach as the recurring-check scratchpad's fetch_recent_games.py,
-including its 2026-08-27 fix for the flat live-process log files that the
-original scratchpad LOGDIRS list couldn't see), fetches full game_state for
-any completed game not already in the index, and appends one JSON record
-per line to data/games_index.jsonl.
-
-Idempotent and crash-safe: existing game_ids are skipped, and each fetched
-record is appended immediately (not batched), so a killed/interrupted run
-loses at most the one in-flight fetch. Safe to re-run any time to pick up
-newly-completed games.
+Game ids are scraped from agent run logs, then each unindexed game is fetched
+from the server. The script is resumable: indexed ids are skipped, and an
+optional argument caps how many games are fetched per run.
 """
+
 import json
 import os
 import re
@@ -36,11 +25,6 @@ LOGDIRS = [
     f"{SCRATCH}/logs/run_to_3000",
 ]
 FAMILIES = ["bargaining", "negotiation", "persuasion"]
-# Flat log files written by manually-launched `agent.main` processes (not the
-# {logdir}/{family}_full.log layout above) -- see fetch_recent_games.py's
-# 2026-08-27 fix for why these need scanning unconditionally per family
-# (cross-family log mixing is real and already handled downstream by
-# checking each fetched game's actual game_family).
 EXTRA_LOGFILES = [
     "/Users/haydenarnold/.claude/jobs/0059f6f8/tmp/live_bargaining_to3000_v2.log",
     "/Users/haydenarnold/.claude/jobs/0059f6f8/tmp/live_negotiation_to3000.log",
@@ -55,16 +39,10 @@ SEED_TRANSCRIPT_FILES = [
 
 ANY_GAME_RE = re.compile(r"Game (?P<id>[0-9a-f-]{36}) \(")
 
-MAX_FETCHES = int(sys.argv[1]) if len(sys.argv) > 1 else 200  # per run, to bound API time/rate-limit use
+MAX_FETCHES = int(sys.argv[1]) if len(sys.argv) > 1 else 200
 
 
 def load_existing_ids():
-    # DERIVED (2026-08-27): entries written before `game_state` was added to
-    # the record are treated as NOT yet indexed, so they get re-fetched and
-    # a second, complete line gets appended for the same game_id. This file
-    # is append-only, so a game_id can appear twice after this transition --
-    # readers (classify_opponents.py) take the LAST occurrence per game_id,
-    # standard dedupe-by-latest for an append-only log.
     ids = set()
     if os.path.exists(INDEX_PATH):
         with open(INDEX_PATH, encoding="utf-8") as f:
@@ -140,14 +118,6 @@ def normalize_record(gs: dict) -> dict:
         record["role"] = state.get(f"{me}_role") or state.get("your_role")
         record["price"] = state.get("product_price") or state.get("price")
         record["rounds_bought"] = result.get("rounds_bought")
-    # DERIVED (2026-08-27): the summary fields above are enough for quick
-    # scanning, but not for classify_opponents.py, which needs the full
-    # round-by-round history (both our actual offers/signals and the
-    # opponent's actual responses) to replay against each archetype's
-    # deterministic rules. That's already sitting in `state` from the same
-    # API call -- storing it here is free (no extra fetch), so every entry
-    # carries it rather than needing a second pass later. Entries indexed
-    # before this change lack `game_state` and are skipped by that script.
     record["game_state"] = state
     return record
 
@@ -201,6 +171,7 @@ def main():
             except Exception as e:
                 errors += 1
                 continue
+            # Spacing between calls keeps us under the API's rate limit.
             time.sleep(0.9)
             if gs.get("status") != "completed":
                 skipped_incomplete += 1

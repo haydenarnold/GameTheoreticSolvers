@@ -1,15 +1,6 @@
-"""Append one row per game family to a local CSV log of rating/games_played
-over time.
+"""Appends the agent's current per-family rating and games played to a CSV.
 
-The GLEE API has no endpoint for historical rating-over-time data (`stats()`
-only returns the current snapshot: rating + games_played per family, no
-history) -- so there's no way to backfill a trajectory before this script
-starts being run. Call this repeatedly (directly, via cron, or via a polling
-loop) to build the log up going forward. `plot_trajectories.py` reads
-whatever this has accumulated.
-
-Usage:
-    .venv/bin/python -m scripts.snapshot_stats
+Read-only against the server, so it is safe to run while the agent is playing.
 """
 
 from __future__ import annotations

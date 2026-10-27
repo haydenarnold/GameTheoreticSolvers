@@ -1,9 +1,6 @@
-"""Simple example agent that plays all three GLEE game families.
+"""Minimal baseline agent: fixed heuristics for all three GLEE game families.
 
-Usage:
-    pip install glee-sdk
-    export GLEE_API_KEY=glee_...   # from your dashboard at glee-competition.com
-    python simple_agent.py
+Kept as a simple reference to compare against the full agent in `agent/`.
 """
 
 import logging
@@ -15,7 +12,6 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s
 
 
 def strategy(game: dict) -> dict:
-    """A simple strategy that handles all three game families."""
     family = game["game_family"]
     actions = game["valid_actions"]
     state = game["game_state"]
@@ -31,7 +27,6 @@ def strategy(game: dict) -> dict:
 
 
 def bargaining_strategy(actions: dict, state: dict) -> dict:
-    """50/50 split proposer; accept if getting >= 40%."""
     money = state["money_to_divide"]
 
     if actions["type"] == "offer":
@@ -40,7 +35,6 @@ def bargaining_strategy(actions: dict, state: dict) -> dict:
 
     if actions["type"] == "decision":
         offer = state["last_offer"]
-        # In the decision phase, current_player is always the offer's receiver.
         my_gain = offer[f"{state['current_player']}_gain"]
 
         if my_gain >= money * 0.4:
@@ -51,10 +45,9 @@ def bargaining_strategy(actions: dict, state: dict) -> dict:
 
 
 def negotiation_strategy(actions: dict, state: dict) -> dict:
-    """Offer midpoint; accept if profitable."""
-    me = state["current_player"]            # on your turn, that's you
-    role = state[f"{me}_role"]              # "seller" or "buyer"
-    my_value = state[f"{me}_value"]        # your own valuation — always visible to you
+    me = state["current_player"]
+    role = state[f"{me}_role"]
+    my_value = state[f"{me}_value"]
 
     if actions["type"] == "offer":
         if role == "seller":
@@ -68,7 +61,7 @@ def negotiation_strategy(actions: dict, state: dict) -> dict:
             if offer_price <= my_value:
                 return {"decision": "AcceptOffer"}
             return {"decision": "RejectOffer", "product_price": my_value * 0.8}
-        else:  # seller
+        else:
             if offer_price >= my_value:
                 return {"decision": "AcceptOffer"}
             return {"decision": "RejectOffer", "product_price": my_value * 1.3}
@@ -77,7 +70,6 @@ def negotiation_strategy(actions: dict, state: dict) -> dict:
 
 
 def persuasion_strategy(actions: dict, state: dict) -> dict:
-    """Seller: always recommend. Buyer: buy if price < expected value."""
     if actions["type"] == "seller_message":
         return {"message": "This is a great product, I highly recommend it!"}
 
@@ -86,9 +78,9 @@ def persuasion_strategy(actions: dict, state: dict) -> dict:
 
     if actions["type"] == "buyer_decision":
         price = state["product_price"]
-        v = state["v"]  # your value for a HIGH-quality unit (GLEE notation; always visible)
-        u = state["u"]  # your value for a LOW-quality unit
-        p = state["p"]  # the prior P(high quality) — the buyer always knows it
+        v = state["v"]
+        u = state["u"]
+        p = state["p"]
         expected_value = p * v + (1 - p) * u
         return {"decision": "yes" if expected_value > price else "no"}
 
@@ -101,8 +93,6 @@ if __name__ == "__main__":
         print("Set GLEE_API_KEY environment variable")
         exit(1)
 
-    # Defaults to the production server (https://glee-competition.com). Set
-    # GLEE_API_URL only when pointing at a local backend during development.
     base_url = os.environ.get("GLEE_API_URL")
     client = (
         GleeClient(api_key=api_key, base_url=base_url)

@@ -1,12 +1,10 @@
+"""Tests for player-name normalization and bargaining offer construction.
+"""
+
 from agent.schema import build_bargaining_offer, read_gain
 
 
 def test_build_offer_uses_literal_alice_bob_keys_even_when_told_player_2():
-    # Regression: a live game reported your_player="player_2" and the
-    # server rejected {"player_2_gain": ..., "player_1_gain": ...} with
-    # "Offer must include 'alice_gain' and 'bob_gain'" five times running,
-    # force-losing every bargaining game in that run. Offer keys are always
-    # literal alice/bob regardless of how your_player is reported.
     action = build_bargaining_offer("player_2", my_gain=600.0, money=1000.0)
     assert set(action) == {"alice_gain", "bob_gain"}
     assert action["bob_gain"] == 600.0

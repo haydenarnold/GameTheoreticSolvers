@@ -1,17 +1,10 @@
-"""Control splits for the persuasion moral-foundation result computed by
-scripts/moral_foundation_analysis.py -- checks whether the association
-between framing and buy rate could be an artifact of game state rather
-than framing itself:
+"""Controls for the persuasion framing result, splitting the data three ways.
 
-  1. Product quality (low/bluff vs. high): does the gap between arms
-     survive when the seller most needs to persuade against the truth?
-  2. Round bucket (early/middle/late): is it a time trend rather than a
-     stable framing effect?
-  3. Value/price ratio range per arm: is arm choice confounded by which
-     configuration (how favorable the deal is) it happened to land in?
-
-Usage: .venv/bin/python scripts/persuasion_rhetoric_controls.py
+Re-runs the chi-square test within product-quality, round-bucket and
+value-to-price strata to check that the framing effect is not an artifact of
+game state.
 """
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -86,7 +79,8 @@ def main() -> None:
     rows = collect_rows()
     print(f"{len(rows)} total classified messages with quality/round/ratio data")
 
-    # 1. quality split
+    # Low-quality rounds are where the seller must persuade against the truth, so
+    # the framing gap is expected to be widest there.
     low_q = [r for r in rows if r["quality"] == "low"]
     high_q = [r for r in rows if r["quality"] == "high"]
     chi2_table(low_q, "LOW quality (bluff rounds)")
@@ -103,7 +97,6 @@ def main() -> None:
     chi2, p, dof, _ = chi2_contingency(contingency)
     print(f"care-vs-loyalty chi2({dof})={chi2:.1f}, p={p:.3g}, n={len(care_low) + len(loy_low)}")
 
-    # 2. round-bucket split
     buckets = defaultdict(list)
     for r in rows:
         if r["round"] is not None:
@@ -120,7 +113,6 @@ def main() -> None:
         loy_rows = [r for r in buckets[label] if r["fnd"] == "loyalty"]
         print(f"  {label}: n={len(loy_rows)} rate={rate(loy_rows):.1%}")
 
-    # 3. price-ratio range by foundation arm
     print("\nvalue/price ratio range by foundation arm:")
     for fnd in FOUNDATIONS:
         ratios = [r["ratio"] for r in rows if r["fnd"] == fnd and r["ratio"] is not None]

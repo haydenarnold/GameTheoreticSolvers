@@ -1,11 +1,11 @@
+"""Tests for the message layer's prompt contract and for parsing model output
+into plain message text.
+"""
+
 from agent.rhetoric.compose import SYSTEM_PROMPT, TARGET_MESSAGE_CHARS, _extract_message_text
 
 
 def test_system_prompt_asks_for_the_target_length_and_against_repetition():
-    # Regression guard: the concision instruction lives inline in
-    # SYSTEM_PROMPT as an f-string interpolation -- a careless edit could
-    # silently drop the {TARGET_MESSAGE_CHARS} reference or the anti-
-    # repetition guidance it depends on without any other test catching it.
     assert str(TARGET_MESSAGE_CHARS) in SYSTEM_PROMPT
     assert "concise" in SYSTEM_PROMPT.lower()
     assert "restate" in SYSTEM_PROMPT.lower() or "repeat" in SYSTEM_PROMPT.lower()
