@@ -19,7 +19,7 @@ CONCESSION_BETA = 0.85
 DEFAULT_PRIOR_SPREAD = 1.5
 # Skips tightening the opponent's value interval from our rejected prices, so the
 # opening anchor stays at the prior bound.
-DISABLE_VALUE_BOUNDS = True
+DISABLE_VALUE_BOUNDS = False
 UNLIMITED_TAU = 30.0
 # A one-shot game has no later round to concede in, so the single offer is priced
 # at a fixed point on the curve rather than at t = 0.

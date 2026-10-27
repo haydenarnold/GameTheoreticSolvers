@@ -25,7 +25,7 @@ FALLBACK_LOW_QUALITY_BLUFF_PROB = 0.35
 BUYER_SAFETY_MARGIN = 0.20
 # Uses the game's prior p instead of the learned trust estimate once past the
 # bootstrap purchases.
-DISABLE_BUYER_TRUST_MODEL = True
+DISABLE_BUYER_TRUST_MODEL = False
 
 MIN_ROUNDS_FOR_NO_INTEL_DETECTION = 3
 

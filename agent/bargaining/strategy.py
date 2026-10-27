@@ -28,7 +28,7 @@ OPENING_OFFER_50_50_DELTA_ME_MAX = 0.90
 # formula can demand the whole pot or collapse to zero.
 MIN_SELF_SHARE_FRAC = 0.30
 # Skips updating the discount-factor belief, so delta_opp stays at the prior mean.
-DISABLE_DELTA_BELIEF = True
+DISABLE_DELTA_BELIEF = False
 MAX_SELF_SHARE_FRAC = 0.70
 DEADLINE_PANIC_ROUND = 90
 FINITE_PANIC_ROUNDS_REMAINING = 2
