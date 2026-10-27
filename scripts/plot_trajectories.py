@@ -1,17 +1,4 @@
-"""Render rating-trajectory plots (one line per game family) from the local
-CSV log that `snapshot_stats.py` builds up over time.
-
-"Trajectory over time" here means each family's *rating*, plotted against
-both games_played and wall-clock time -- not individual past games, since
-the GLEE API has no endpoint that lists historical games or their outcomes;
-`stats()` only ever returns the current snapshot. Family-level rating over
-games_played/time is the trajectory that's actually reconstructable from
-what the API exposes.
-
-Usage:
-    .venv/bin/python -m scripts.plot_trajectories
-    .venv/bin/python -m scripts.plot_trajectories --data data/stats_history.csv --out plots/
-"""
+"""Plots rating against games played and against time from the stats snapshots."""
 
 from __future__ import annotations
 
@@ -23,7 +10,7 @@ from pathlib import Path
 
 import matplotlib
 
-matplotlib.use("Agg")  # headless: never try to open a GUI window
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 

@@ -6,3 +6,5 @@ __pycache__/
 .claude/
 .DS_Store
 .Rhistory
+plots/
+paper/figures/
